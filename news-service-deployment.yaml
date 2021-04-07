@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: news-service
+  labels:
+    app: news-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: news-service
+  template:
+    metadata:
+      labels:
+        app: news-service
+    spec:
+      containers:
+      - name: news-service            
+        image: quay.io/nickmramirez/news-service
+      - name: haproxy-consul         
+        image: haproxytech/haproxy-consul-connect
+        args: ["-sidecar-for", "news-service", "-enable-intentions"]
+      - name: consul                 
+        image: consul
+        env:
+              - name: CONSUL_LOCAL_CONFIG
+                value: '{
+                  "service": {
+                    "name": "news-service",
+                    "port": 80,
+                    "connect": {
+                      "sidecar_service": {}
+                    }
+                  }
+              }'
+        args:
+        - agent
+        - -bind=0.0.0.0
+        - "-retry-join=provider=k8s label_selector=\"app=consul\""

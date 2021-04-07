@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-ui
+  labels:
+    app: app-ui
+spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: app-ui
+    template:
+      metadata:
+        labels:
+          app: app-ui
+      spec:
+        containers:
+        - name: app-ui            
+          image: quay.io/nickmramirez/app-ui
+        - name: haproxy-consul    
+          image: haproxytech/haproxy-consul-connect
+          args: ["-sidecar-for", "app-ui", "-enable-intentions"]
+        - name: consul            
+          image: consul
+          env:
+          - name: CONSUL_LOCAL_CONFIG
+            value: '{
+                "service": {
+                  "name": "app-ui",
+                  "port": 80,
+                  "connect": {
+                    "sidecar_service": {
+                        "proxy": {
+                            "upstreams": [
+                                {
+                                  "destination_name": "news-service",
+                                  "local_bind_port": 3000
+                                }
+                            ]
+                        }
+                    }
+                  }
+                }
+              }'
+          args:
+          - agent
+          - -bind=0.0.0.0
+          - "-retry-join=provider=k8s label_selector=\"app=consul\""
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: app-ui
+spec:
+    selector:
+      app: app-ui
+    ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 80
